@@ -13,11 +13,39 @@ API_HASH = '6c35a6247e6b6502e5b79173b22af871'
 SESSION_NAME = 'inviter_session'
 GROUPS_TO_PARSE = [
     '@NRWanzeigen', '@ukraineingermany1', '@ukrainians_in_germany1',
-    '@berlin_ukrainians', '@jobinde', '@hamburg_ukrainians', '@UA_in_Germany',
-    '@dusseldorfukrain', '@GermanyTop1', '@germany_chatik'
+    '@berlin_ukrainians', '@deutscheukraine', '@ukraincifrankfurt',
+    '@jobinde', '@hamburg_ukrainians', '@UkraineinMunich',
+    '@workeuropeplus', '@UA_in_Germany', '@dusseldorfukrain',
+    '@TruckingNordrheinWestfalen', '@Berlin_UA2025', '@bonn_help',
+    '@GermanyTop1', '@germany_chatik', '@nrw_anzeige', '@bochum_ua',
+    '@POZITYV_PUTESHESTVIYA', '@uahelpkoelnanzeigen', '@cologne_help',
+    '@TheGermany1', '@germania_migranty', '@GLOBUSEXPRESS',
+    '@nashipomogut', '@reklamnaia_ploshadka', '@ukr_de_essen',
+    '@solingen_UA', '@keln_baraholka', '@baraholkaNRW',
+    '@ukraine_dortmund', '@ukrainischinDortmund', '@UADuesseldorf',
+    '@beauty_dusseldorf', '@pomoshukraineaachen', '@AhlenNRW',
+    '@alsdorfua', '@aschafenburg', '@NA6R_hilft', '@bad4ua',
+    '@badenbaden_lkr', '@kreiskleve', '@Bernkastel_Wittlich',
+    '@bielefeldhelps', '@ukraine_bochum_support', '@uahelp_ruhrgebiet',
+    '@DeutschlandBottrop', '@BS_UA_HELP', '@refugeesbremen',
+    '@Bruchsal_Chat', '@Ukrainians_in_Calw', '@hilfe_ukraine_chemnitz',
+    '@cottbus_ua', '@hamburg_ukraine_chat', '@Magdeburg_ukrainian',
+    '@Fainy_Kiel', '@ukraine_in_Hanover', '@uahelfen_arbeit',
+    '@bremen_hannover_dresden', '@ukraine_in_dresden', '@BavariaLife',
+    '@ErfurtUA', '@save_ukraine_de_essen', '@MunchenBavaria',
+    '@refugees_help_Koblenz', '@KaiserslauternUA', '@Karlsruhe_Ukraine',
+    '@MunchenGessenBremen', '@chatFreiburg', '@Pfaffenhofen',
+    '@deutschland_diaspora', '@Manner_ClubNRW', '@Ukrainer_in_Deutschland',
+    '@Ukrainer_in_Wuppertal', '@ukrainians_in_hamburg_ua', '@ukrainians_berlin',
+    '@berlinhelpsukrainians', '@Bayreuth_Bamberg'
 ]
 KEYWORDS = [
-    'адвокат', 'адвоката', 'юрист', 'юриста', 'помощь адвоката', 'lawyer', 'anwalt'
+    'адвокат', 'адвоката', 'адвокатом', 'адвокату',
+    'юрист', 'юриста', 'юристу', 'юристом',
+    'помощь адвоката', 'полиция', 'прокуратура',
+    'поліція', 'прокурор',
+    'lawyer', 'attorney', 'police', 'prosecutor', 'court',
+    'anwalt', 'rechtsanwalt', 'polizei', 'staatsanwalt', 'gericht'
 ]
 YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
 USERS_FILE = 'users_to_invite.json'
