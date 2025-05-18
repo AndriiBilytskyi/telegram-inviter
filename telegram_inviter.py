@@ -47,16 +47,16 @@ KEYWORDS = [
     'lawyer', 'attorney', 'police', 'prosecutor', 'court',
     'anwalt', 'rechtsanwalt', 'polizei', 'staatsanwalt', 'gericht'
 ]
-YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
+YOUR_GROUP = 'advocate_ua_1'
 USERS_FILE = 'users_to_invite.json'
-AUTO_MODE = os.getenv("BOT_MODE", "parse")  # parse или invite
+AUTO_MODE = os.getenv("BOT_MODE", "parse")
 
 # === Вспомогательные функции ===
 def normalize(text):
     return re.sub(r'[^\w\s]', '', text.lower()).strip()
 
 async def parse_users(client):
-    users_set = set()
+    users_dict = {}
 
     for group in GROUPS_TO_PARSE:
         print(f"Парсинг группы: {group}")
@@ -65,17 +65,22 @@ async def parse_users(client):
                 if message.sender_id and message.text:
                     normalized_text = normalize(message.text)
                     if any(kw in normalized_text for kw in KEYWORDS):
-                        users_set.add(message.sender_id)
-                        print(f"✅ Найден пользователь: {message.sender_id}")
+                        try:
+                            sender = await message.get_sender()
+                            user_id = sender.id
+                            username = sender.username
+                            users_dict[user_id] = {"id": user_id, "username": username}
+                            print(f"✅ Найден пользователь: {user_id} @{username or '—'}")
+                        except Exception as e:
+                            print(f"⚠️ Не удалось получить отправителя: {e}")
         except Exception as e:
             print(f"❌ Ошибка при парсинге {group}: {e}")
 
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(list(users_set), f, ensure_ascii=False, indent=2)
+        json.dump(list(users_dict.values()), f, ensure_ascii=False, indent=2)
 
-    print(f"📝 Всего найдено: {len(users_set)} пользователей")
+    print(f"📝 Всего найдено: {len(users_dict)} пользователей")
 
-    # 💌 Отправить файл себе в Telegram (в Избранное)
     try:
         await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
         print("📤 Файл отправлен в Saved Messages")
@@ -98,26 +103,30 @@ async def invite_users(client):
 
     invited_today = 0
 
-    for user_id in users[:]:
+    for user in users[:]:
         if invited_today >= 50:
             print("📅 Дневной лимит 50 инвайтов достигнут!")
             break
 
         try:
-            await client(InviteToChannelRequest(target_group, [user_id]))
-            print(f"✅ Пользователь {user_id} приглашен")
-            users.remove(user_id)
+            if user.get("username"):
+                entity = await client.get_input_entity(f"@{user['username']}")
+            else:
+                entity = await client.get_input_entity(user['id'])
+            await client(InviteToChannelRequest(target_group, [entity]))
+            print(f"✅ Приглашён: {user['id']} (@{user.get('username', '—')})")
+            users.remove(user)
             invited_today += 1
-            time.sleep(60)  # Задержка между приглашениями (1 минута)
+            time.sleep(60)
         except Exception as e:
-            print(f"❌ Ошибка приглашения {user_id}: {e}")
-            users.remove(user_id)
+            print(f"❌ Ошибка приглашения {user['id']}: {e}")
+            users.remove(user)
             continue
 
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, ensure_ascii=False, indent=2)
 
-    print(f"🚀 Инвайты закончены, осталось пользователей: {len(users)}")
+    print(f"🚀 Инвайты завершены. Осталось пользователей: {len(users)}")
 
 async def main():
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
