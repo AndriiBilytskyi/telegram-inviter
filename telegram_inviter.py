@@ -60,12 +60,15 @@ async def parse_users(client):
 
     for group in GROUPS_TO_PARSE:
         print(f"Парсинг группы: {group}")
-        async for message in client.iter_messages(group, limit=1000):
-            if message.sender_id and message.text:
-                normalized_text = normalize(message.text)
-                if any(kw in normalized_text for kw in KEYWORDS):
-                    users_set.add(message.sender_id)
-                    print(f"✅ Найден пользователь: {message.sender_id}")
+        try:
+            async for message in client.iter_messages(group, limit=1000):
+                if message.sender_id and message.text:
+                    normalized_text = normalize(message.text)
+                    if any(kw in normalized_text for kw in KEYWORDS):
+                        users_set.add(message.sender_id)
+                        print(f"✅ Найден пользователь: {message.sender_id}")
+        except Exception as e:
+            print(f"❌ Ошибка при парсинге {group}: {e}")
 
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(list(users_set), f, ensure_ascii=False, indent=2)
