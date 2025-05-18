@@ -49,7 +49,7 @@ KEYWORDS = [
 ]
 YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
 USERS_FILE = 'users_to_invite.json'
-YOUR_USERNAME = 'Andrii_Bilytskyi'
+YOUR_USERNAME = 'Andrii_Bilytskyi'  # Куда отправлять файл после парсинга
 AUTO_MODE = os.getenv("BOT_MODE", "parse")  # parse или invite
 
 # === Вспомогательные функции ===
@@ -72,6 +72,13 @@ async def parse_users(client):
         json.dump(list(users_set), f, ensure_ascii=False, indent=2)
 
     print(f"📝 Всего найдено: {len(users_set)} пользователей")
+
+    # 💌 Отправить файл себе в Telegram
+    try:
+        await client.send_file(YOUR_USERNAME, USERS_FILE, caption="👥 Список пользователей для инвайта")
+        print(f"📤 Файл отправлен пользователю @{YOUR_USERNAME}")
+    except Exception as e:
+        print(f"❌ Не удалось отправить файл: {e}")
 
 async def invite_users(client):
     if not os.path.exists(USERS_FILE):
