@@ -49,7 +49,6 @@ KEYWORDS = [
 ]
 YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
 USERS_FILE = 'users_to_invite.json'
-YOUR_USERNAME = 'Andrii_Bilytskyi'  # Куда отправлять файл после парсинга
 AUTO_MODE = os.getenv("BOT_MODE", "parse")  # parse или invite
 
 # === Вспомогательные функции ===
@@ -73,10 +72,10 @@ async def parse_users(client):
 
     print(f"📝 Всего найдено: {len(users_set)} пользователей")
 
-    # 💌 Отправить файл себе в Telegram
+    # 💌 Отправить файл себе в Telegram (в Избранное)
     try:
-        await client.send_file(YOUR_USERNAME, USERS_FILE, caption="👥 Список пользователей для инвайта")
-        print(f"📤 Файл отправлен пользователю @{YOUR_USERNAME}")
+        await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
+        print("📤 Файл отправлен в Saved Messages")
     except Exception as e:
         print(f"❌ Не удалось отправить файл: {e}")
 
