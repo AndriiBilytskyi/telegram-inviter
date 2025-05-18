@@ -49,6 +49,7 @@ KEYWORDS = [
 ]
 YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
 USERS_FILE = 'users_to_invite.json'
+YOUR_USERNAME = 'Andrii_Bilytskyi'
 AUTO_MODE = os.getenv("BOT_MODE", "parse")  # parse или invite
 
 # === Вспомогательные функции ===
