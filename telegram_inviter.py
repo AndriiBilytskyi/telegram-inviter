@@ -21,6 +21,7 @@ KEYWORDS = [
 ]
 YOUR_GROUP = 'advocate_ua_1'  # Ваша группа для инвайтов
 USERS_FILE = 'users_to_invite.json'
+AUTO_MODE = os.getenv("BOT_MODE", "parse")  # parse или invite
 
 # === Вспомогательные функции ===
 def normalize(text):
@@ -84,15 +85,14 @@ async def main():
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     await client.start()
 
-    print("1 — Парсинг пользователей\n2 — Приглашение пользователей")
-    action = input("Выберите действие: ")
-
-    if action == '1':
+    if AUTO_MODE == "parse":
+        print("▶️ Автоматический режим: ПАРСИНГ")
         await parse_users(client)
-    elif action == '2':
+    elif AUTO_MODE == "invite":
+        print("▶️ Автоматический режим: ИНВАЙТ")
         await invite_users(client)
     else:
-        print("❌ Неверный выбор!")
+        print("❌ BOT_MODE не распознан. Используйте 'parse' или 'invite'")
 
 if __name__ == "__main__":
     asyncio.run(main())
