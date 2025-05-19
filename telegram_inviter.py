@@ -68,6 +68,38 @@ YOUR_GROUP = 'advocate_ua_1'
 USERS_FILE = 'users_to_invite.json'
 INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
 
+async def parse_users(client):
+    users_dict = {}
+    for group in GROUPS_TO_PARSE:
+        print(f"📡 Парсинг группы: {group}")
+        try:
+            async for message in client.iter_messages(group, limit=1000):
+                if message.sender_id and message.text:
+                    text = re.sub(r'[^\w\s]', '', message.text.lower())
+                    if any(kw in text for kw in KEYWORDS):
+                        sender = await message.get_sender()
+                        uid = sender.id
+                        if uid not in users_dict:
+                            users_dict[uid] = {"id": uid, "username": sender.username}
+                            print(f"✅ Найден пользователь: {uid} @{sender.username or '—'}")
+        except Exception as e:
+            print(f"❌ Ошибка в {group}: {e}")
+
+    print(f"📊 Найдено пользователей: {len(users_dict)}")
+
+    if users_dict:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(list(users_dict.values()), f, ensure_ascii=False, indent=2)
+
+        try:
+            print("📤 Пытаемся отправить users_to_invite.json в Избранное...")
+            await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
+            print("✅ Файл отправлен в Saved Messages")
+        except Exception as e:
+            print(f"❌ Не удалось отправить файл: {e}")
+    else:
+        print("⚠️ Пользователи не найдены. Файл не создан.")
+
 async def invite_users_with_fallback():
     for account in ACCOUNTS:
         client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
@@ -75,8 +107,8 @@ async def invite_users_with_fallback():
         print(f"🚀 Работаем через сессию: {account['session']}")
 
         try:
-            await process_invites(client)
-            break  # Успешно — выходим
+            await parse_users(client)
+            break
         except FloodWaitError as e:
             print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек. Ждём...")
             await asyncio.sleep(e.seconds)
@@ -84,55 +116,6 @@ async def invite_users_with_fallback():
             print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
         finally:
             await client.disconnect()
-
-async def process_invites(client):
-    if not os.path.exists(USERS_FILE):
-        print("❌ Нет файла пользователей")
-        return
-
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        users = json.load(f)
-
-    group = await client.get_entity(YOUR_GROUP)
-    invited = 0
-    messaged = 0
-
-    for user in users[:]:
-        if invited >= MAX_INVITES_PER_DAY and messaged >= MAX_MESSAGES_PER_DAY:
-            print("⛔️ Достигнут дневной лимит")
-            break
-
-        try:
-            if user.get("username"):
-                entity = await client.get_input_entity(f"@{user['username']}")
-            else:
-                entity = await client.get_input_entity(user['id'])
-
-            if invited < MAX_INVITES_PER_DAY:
-                await client(InviteToChannelRequest(group, [entity]))
-                print(f"✅ Приглашён: {user['id']}")
-                invited += 1
-            else:
-                raise UserPrivacyRestrictedError(None)
-
-        except UserPrivacyRestrictedError:
-            if messaged < MAX_MESSAGES_PER_DAY and user.get("username"):
-                try:
-                    await client.send_message(f"@{user['username']}", INVITE_MESSAGE)
-                    print(f"✉️ Сообщение: @{user['username']}")
-                    messaged += 1
-                except Exception as e:
-                    print(f"⚠️ Ошибка сообщения {user['id']}: {e}")
-        except Exception as e:
-            print(f"⚠️ Ошибка: {user['id']} — {e}")
-
-        users.remove(user)
-        await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
-
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
-
-    print(f"🏁 Завершено: {invited} инвайтов, {messaged} сообщений")
 
 if __name__ == "__main__":
     asyncio.run(invite_users_with_fallback())
