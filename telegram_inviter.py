@@ -1,35 +1,36 @@
-import os
+import asyncio
 import json
-import logging
-from datetime import datetime
-
-from telethon import TelegramClient, errors, types
+import os
+import re
+import time
+from telethon import TelegramClient
+from telethon.errors import (
+    UserPrivacyRestrictedError, UserAlreadyParticipantError,
+    FloodWaitError, PeerIdInvalidError, RPCError
+)
 from telethon.tl.functions.channels import InviteToChannelRequest
-from telethon.tl.functions.messages import AddChatUserRequest
 
-# Logging configuration
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
+# === Telegram Limits ===
+MAX_INVITES_PER_DAY = 20
+MAX_MESSAGES_PER_DAY = 5
+DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
+MAX_GROUPS_PER_CYCLE = 20
+GROUP_RETRY_DELAY = 14400  # 4 часа в секундах
 
-# Telegram API credentials from environment
-API_ID = int(os.environ.get('TELEGRAM_API_ID', 0))
-API_HASH = os.environ.get('TELEGRAM_API_HASH', None)
-if not API_ID or not API_HASH:
-    logging.error("API_ID or API_HASH not set. Please set TELEGRAM_API_ID and TELEGRAM_API_HASH.")
-    raise SystemExit(1)
+# === Аккаунты ===
+ACCOUNTS = [
+    {
+        "session": "inviter_session_1",
+        "api_id": int(os.getenv("API_ID_1")),
+        "api_hash": os.getenv("API_HASH_1")
+    },
+    {
+        "session": "inviter_session_2",
+        "api_id": int(os.getenv("API_ID_2")),
+        "api_hash": os.getenv("API_HASH_2")
+    }
+]
 
-# Session file names
-SESSION_NAME1 = 'inviter_session_1'
-SESSION_NAME2 = 'inviter_session_2'
-
-# File paths
-BOT_MODE_FILE = 'bot_mode.json'
-GROUP_PROGRESS_FILE = 'group_progress.json'
-USERS_FILE = 'users_to_invite.json'
-DM_COUNTER_FILE = 'dm_counter.json'
-
-# Groups and keywords lists (provided by user)
 GROUPS_TO_PARSE = [
     '@NRWanzeigen', '@ukraineingermany1', '@ukrainians_in_germany1',
     '@berlin_ukrainians', '@deutscheukraine', '@ukraincifrankfurt',
@@ -58,6 +59,7 @@ GROUPS_TO_PARSE = [
     '@Ukrainer_in_Wuppertal', '@ukrainians_in_hamburg_ua', '@ukrainians_berlin',
     '@berlinhelpsukrainians', '@Bayreuth_Bamberg'
 ]
+
 KEYWORDS = [
     'адвокат', 'адвоката', 'адвокатом', 'адвокату',
     'юрист', 'юриста', 'юристу', 'юристом',
@@ -67,6 +69,48 @@ KEYWORDS = [
     'anwalt', 'rechtsanwalt', 'polizei', 'staatsanwalt', 'gericht'
 ]
 
+YOUR_GROUP = 'advocate_ua_1'
+USERS_FILE = 'users_to_invite.json'
+INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
+
+GROUP_PROGRESS_FILE = "group_progress.json"
+MODE_FILE = "bot_mode.json"
+
+# === Получение очередной порции групп ===
+def get_next_group_batch():
+    try:
+        with open(GROUP_PROGRESS_FILE, 'r') as f:
+            state = json.load(f)
+    except:
+        state = {"last_index": 0}
+
+    start = state["last_index"]
+    end = min(start + MAX_GROUPS_PER_CYCLE, len(GROUPS_TO_PARSE))
+    batch = GROUPS_TO_PARSE[start:end]
+
+    state["last_index"] = 0 if end >= len(GROUPS_TO_PARSE) else end
+    with open(GROUP_PROGRESS_FILE, 'w') as f:
+        json.dump(state, f)
+    return batch
+
+# === Смена режима: auto переключает между parse/invite ===
+def get_effective_mode():
+    mode = os.getenv("BOT_MODE", "auto").lower()
+    if mode != "auto":
+        return mode
+
+    try:
+        with open(MODE_FILE, 'r') as f:
+            data = json.load(f)
+            last = data.get("last", "invite")
+    except:
+        last = "invite"
+
+    next_mode = "parse" if last == "invite" else "invite"
+    with open(MODE_FILE, 'w') as f:
+        json.dump({"last": next_mode}, f)
+    return next_mode
+  
 async def main():
     # Determine current mode from file (auto toggle between parse and invite)
     current_mode = 'parse'
