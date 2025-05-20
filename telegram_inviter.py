@@ -54,6 +54,8 @@ KEYWORDS = [
 ]
 
 YOUR_GROUP = 'advocate_ua_1'
+INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
+
 USERS_FILE = 'users_to_invite.json'
 GROUP_LOG = 'group_parse_log.json'
 INVITED_LOG = 'invited_log.json'
@@ -143,6 +145,10 @@ async def invite_users(account):
         try:
             entity = await client.get_entity(user['id'])
             await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
+            try:
+                await client.send_message(entity, INVITE_MESSAGE)
+            except Exception as e:
+                print(f"⚠️ Не удалось отправить сообщение: {e}")
             print(f"🎯 {account['session']} пригласил: {user['id']}")
             invited.append(user)
             invited_today += 1
