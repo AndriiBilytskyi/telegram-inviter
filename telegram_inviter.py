@@ -14,7 +14,7 @@ from telethon.tl.functions.channels import InviteToChannelRequest
 MAX_INVITES_PER_DAY = 20
 MAX_MESSAGES_PER_DAY = 5
 DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
-MAX_GROUPS_PER_CYCLE = 20
+MAX_GROUPS_PER_CYCLE = 10
 GROUP_RETRY_DELAY = 14400  # 4 часа в секундах
 
 # === Аккаунты ===
