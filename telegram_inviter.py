@@ -60,7 +60,7 @@ INVITED_LOG = 'invited_log.json'
 
 ACCOUNTS = [
     {"session": "inviter_session_1", "api_id": int(os.getenv("API_ID_1")), "api_hash": os.getenv("API_HASH_1")},
-    {"session": "inviter_session_2", "api_id": int(os.getenv("API_ID_2")), "api_hash": os.getenv("API_HASH_2"))}
+    {"session": "inviter_session_2", "api_id": int(os.getenv("API_ID_2")), "api_hash": os.getenv("API_HASH_2")}
 ]
 
 async def parse_users(account):
@@ -169,3 +169,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
