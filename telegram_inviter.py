@@ -73,9 +73,10 @@ YOUR_GROUP = 'advocate_ua_1'
 USERS_FILE = 'users_to_invite.json'
 INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
 
-# ====== Файл для отслеживания очереди групп ======
 GROUP_PROGRESS_FILE = "group_progress.json"
+MODE_FILE = "bot_mode.json"
 
+# === Получение очередной порции групп ===
 def get_next_group_batch():
     try:
         with open(GROUP_PROGRESS_FILE, 'r') as f:
@@ -91,6 +92,24 @@ def get_next_group_batch():
     with open(GROUP_PROGRESS_FILE, 'w') as f:
         json.dump(state, f)
     return batch
+
+# === Смена режима: auto переключает между parse/invite ===
+def get_effective_mode():
+    mode = os.getenv("BOT_MODE", "auto").lower()
+    if mode != "auto":
+        return mode
+
+    try:
+        with open(MODE_FILE, 'r') as f:
+            data = json.load(f)
+            last = data.get("last", "invite")
+    except:
+        last = "invite"
+
+    next_mode = "parse" if last == "invite" else "invite"
+    with open(MODE_FILE, 'w') as f:
+        json.dump({"last": next_mode}, f)
+    return next_mode
     
 async def parse_users(client):
     users_dict = {}
