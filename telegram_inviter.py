@@ -119,6 +119,9 @@ async def parse_users(account):
 
     await client.disconnect()
 
+from telethon.tl.types import InputPeerUser
+import asyncio
+
 async def invite_users(account):
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
     await client.start()
@@ -142,18 +145,28 @@ async def invite_users(account):
     for user in to_invite:
         if invited_today >= MAX_INVITES_PER_DAY:
             break
+
+        print(f"🔍 Обрабатывается пользователь: {user}")
+
         try:
+            # Сначала пробуем по username
             if user.get("username"):
-                entity = await client.get_input_entity(user["username"])
+                try:
+                    entity = await asyncio.wait_for(client.get_input_entity(user["username"]), timeout=10)
+                except asyncio.TimeoutError:
+                    print(f"⏱️ Таймаут: {user['username']}")
+                    continue
             else:
-                entity = await client.get_input_entity(user["id"])
+                # Без username — скипаем (можно изменить на get_entity + resolve)
+                print(f"⚠️ Пропущен: нет username у {user['id']}")
+                continue
 
             await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
 
             try:
                 await client.send_message(entity, INVITE_MESSAGE)
             except Exception as e:
-                print(f"⚠️ Не удалось отправить сообщение: {e}")
+                print(f"⚠️ Не удалось отправить сообщение {user['id']}: {e}")
 
             print(f"🎯 {account['session']} пригласил: {user['id']}")
             invited.append(user)
