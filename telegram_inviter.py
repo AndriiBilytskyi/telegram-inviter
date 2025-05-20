@@ -75,6 +75,7 @@ INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который 
 
 GROUP_PROGRESS_FILE = "group_progress.json"
 MODE_FILE = "bot_mode.json"
+ACCOUNT_INDEX_FILE = "account_index.json"
 
 # === Получение очередной порции групп ===
 def get_next_group_batch():
@@ -93,7 +94,7 @@ def get_next_group_batch():
         json.dump(state, f)
     return batch
 
-# === Смена режима: auto переключает между parse/invite ===
+# === Режим: auto переключает между parse/invite ===
 def get_effective_mode():
     mode = os.getenv("BOT_MODE", "auto").lower()
     if mode != "auto":
@@ -111,7 +112,18 @@ def get_effective_mode():
         json.dump({"last": next_mode}, f)
     return next_mode
 
-# === Основная логика ===
+# === Цикличная смена аккаунтов ===
+def get_next_account():
+    try:
+        with open(ACCOUNT_INDEX_FILE, 'r') as f:
+            idx = json.load(f).get("index", 0)
+    except:
+        idx = 0
+    new_idx = (idx + 1) % len(ACCOUNTS)
+    with open(ACCOUNT_INDEX_FILE, 'w') as f:
+        json.dump({"index": new_idx}, f)
+    return ACCOUNTS[new_idx]
+
 async def parse_users(client):
     users_dict = {}
     for group in get_next_group_batch():
@@ -183,25 +195,25 @@ async def main():
     mode = get_effective_mode()
     print(f"▶️ Режим: {mode.upper()}")
 
-    for account in ACCOUNTS:
-        client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
-        await client.start()
-        print(f"🚀 Работаем через сессию: {account['session']}")
+    account = get_next_account()
+    client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
+    await client.start()
+    print(f"🚀 Работаем через сессию: {account['session']}")
 
-        try:
-            if mode == "parse":
-                await parse_users(client)
-            elif mode == "invite":
-                await invite_users(client)
-            else:
-                print(f"⚠️ Неизвестный режим: {mode}")
-        except FloodWaitError as e:
-            print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек. Ждём...")
-            await asyncio.sleep(e.seconds)
-        except Exception as e:
-            print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
-        finally:
-            await client.disconnect()
+    try:
+        if mode == "parse":
+            await parse_users(client)
+        elif mode == "invite":
+            await invite_users(client)
+        else:
+            print(f"⚠️ Неизвестный режим: {mode}")
+    except FloodWaitError as e:
+        print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек. Ждём...")
+        await asyncio.sleep(e.seconds)
+    except Exception as e:
+        print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
+    finally:
+        await client.disconnect()
 
 if __name__ == "__main__":
     asyncio.run(main())
