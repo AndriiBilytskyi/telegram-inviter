@@ -14,8 +14,8 @@ from telethon.tl.functions.channels import InviteToChannelRequest
 MAX_INVITES_PER_DAY = 20
 MAX_MESSAGES_PER_DAY = 5
 DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
-MAX_GROUPS_PER_CYCLE = 10
-GROUP_RETRY_DELAY = 14400  # 4 часа в секундах
+MAX_GROUPS_PER_CYCLE = 3     # снижено для обхода ограничений
+GROUP_RETRY_DELAY = 14400    # 4 часа в секундах
 
 # === Аккаунты ===
 ACCOUNTS = [
@@ -111,13 +111,13 @@ def get_effective_mode():
         json.dump({"last": next_mode}, f)
     return next_mode
 
+# === Основная логика ===
 async def parse_users(client):
     users_dict = {}
-    batch = get_next_group_batch()
-
-    for group in batch:
+    for group in get_next_group_batch():
         print(f"📡 Парсинг группы: {group}")
         try:
+            await asyncio.sleep(5)
             async for message in client.iter_messages(group, limit=1000):
                 if message.sender_id and message.text:
                     text = re.sub(r'[^\w\s]', '', message.text.lower())
@@ -137,8 +137,8 @@ async def parse_users(client):
             json.dump(list(users_dict.values()), f, ensure_ascii=False, indent=2)
 
         try:
+            print("📤 Отправка users_to_invite.json в Избранное...")
             await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
-            print("✅ Файл отправлен в Saved Messages")
         except Exception as e:
             print(f"❌ Не удалось отправить файл: {e}")
     else:
@@ -146,48 +146,38 @@ async def parse_users(client):
 
 async def invite_users(client):
     if not os.path.exists(USERS_FILE):
-        print("⚠️ Нет файла users_to_invite.json — запусти сначала режим parse.")
+        print("❌ Файл пользователей не найден")
         return
 
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         users = json.load(f)
 
-    invited_count = 0
-    messaged_count = 0
-
+    count_invited = 0
+    count_messaged = 0
     for user in users:
-        if invited_count >= MAX_INVITES_PER_DAY and messaged_count >= MAX_MESSAGES_PER_DAY:
-            print("🛑 Достигнут лимит на инвайты и сообщения")
-            break
-
         try:
-            entity = await client.get_entity(user['id'])
+            if count_invited >= MAX_INVITES_PER_DAY and count_messaged >= MAX_MESSAGES_PER_DAY:
+                print("⏹️ Достигнут дневной лимит приглашений и сообщений")
+                break
 
+            entity = await client.get_entity(user['id'])
             try:
                 await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
-                print(f"✅ Приглашён: {user['id']} @{user.get('username', '—')}")
-                invited_count += 1
-                await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
-                continue
-            except UserAlreadyParticipantError:
-                print(f"ℹ️ Уже в группе: {user['id']}")
-                continue
-            except UserPrivacyRestrictedError:
-                print(f"⛔ Приватность не позволяет пригласить: {user['id']}")
-            except RPCError as e:
-                print(f"⚠️ Ошибка: {user['id']} — {e}")
-
-            if messaged_count < MAX_MESSAGES_PER_DAY:
-                try:
+                print(f"✅ Приглашён: {user['id']}")
+                count_invited += 1
+            except (UserAlreadyParticipantError):
+                print(f"⚠️ Уже в группе: {user['id']}")
+            except (UserPrivacyRestrictedError, RPCError):
+                if count_messaged < MAX_MESSAGES_PER_DAY:
                     await client.send_message(entity, INVITE_MESSAGE)
                     print(f"📩 Сообщение отправлено: {user['id']}")
-                    messaged_count += 1
-                    await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
-                except Exception as e:
-                    print(f"⚠️ Не удалось отправить сообщение: {e}")
-
+                    count_messaged += 1
+            await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
+        except FloodWaitError as e:
+            print(f"⏳ FloodWait: ждём {e.seconds} секунд...")
+            await asyncio.sleep(e.seconds)
         except Exception as e:
-            print(f"⚠️ Ошибка получения сущности: {user['id']} — {e}")
+            print(f"⚠️ Ошибка: {user['id']} — {e}")
 
 async def main():
     mode = get_effective_mode()
@@ -205,9 +195,8 @@ async def main():
                 await invite_users(client)
             else:
                 print(f"⚠️ Неизвестный режим: {mode}")
-            break
         except FloodWaitError as e:
-            print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек.")
+            print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек. Ждём...")
             await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
