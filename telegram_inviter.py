@@ -123,6 +123,13 @@ from telethon.tl.types import InputPeerUser
 import asyncio
 
 async def invite_users(account):
+    from telethon.tl.functions.channels import InviteToChannelRequest
+    from telethon.errors import (
+        UserAlreadyParticipantError,
+        UserPrivacyRestrictedError,
+        FloodWaitError
+    )
+
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
     await client.start()
 
@@ -142,48 +149,44 @@ async def invite_users(account):
     to_invite = [u for u in users if u["id"] not in invited_ids]
     invited_today = 0
 
+    print(f"🚀 INVITE | {account['session']}")
+
     for user in to_invite:
         if invited_today >= MAX_INVITES_PER_DAY:
             break
 
-        print(f"🔍 Обрабатывается пользователь: {user}")
+        if not user.get("username"):
+            print(f"⛔ Пропускаю {user['id']} — нет username для get_entity()")
+            continue
 
         try:
-            # Сначала пробуем по username
-            if user.get("username"):
-                try:
-                    entity = await asyncio.wait_for(client.get_input_entity(user["username"]), timeout=10)
-                except asyncio.TimeoutError:
-                    print(f"⏱️ Таймаут: {user['username']}")
-                    continue
-            else:
-                # Без username — скипаем (можно изменить на get_entity + resolve)
-                print(f"⚠️ Пропущен: нет username у {user['id']}")
-                continue
-
+            entity = await client.get_entity(user["username"])
             await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
 
             try:
                 await client.send_message(entity, INVITE_MESSAGE)
             except Exception as e:
-                print(f"⚠️ Не удалось отправить сообщение {user['id']}: {e}")
+                print(f"⚠️ Не удалось отправить сообщение {user['username']}: {e}")
 
-            print(f"🎯 {account['session']} пригласил: {user['id']}")
+            print(f"🎯 {account['session']} пригласил: {user['id']} ({user['username']})")
             invited.append(user)
             invited_today += 1
             await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
 
         except UserAlreadyParticipantError:
-            print(f"↪️ Уже в группе: {user['id']}")
+            print(f"ℹ️ Уже в группе: {user['username']}")
             invited.append(user)
+
         except UserPrivacyRestrictedError:
-            print(f"🔒 Приватность: {user['id']}")
+            print(f"🔒 Приватность: {user['username']}")
             invited.append(user)
+
         except FloodWaitError as e:
             print(f"⏳ FloodWait: ждём {e.seconds} сек...")
             await asyncio.sleep(e.seconds)
+
         except Exception as e:
-            print(f"⚠️ Ошибка при приглашении {user['id']}: {e}")
+            print(f"⚠️ Ошибка при приглашении {user['username']}: {e}")
 
     with open(INVITED_LOG, 'w', encoding='utf-8') as f:
         json.dump(invited, f, ensure_ascii=False, indent=2)
