@@ -14,6 +14,8 @@ from telethon.tl.functions.channels import InviteToChannelRequest
 MAX_INVITES_PER_DAY = 20
 MAX_MESSAGES_PER_DAY = 5
 DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
+MAX_GROUPS_PER_CYCLE = 20
+GROUP_RETRY_DELAY = 14400  # 4 часа в секундах
 
 # === Аккаунты ===
 ACCOUNTS = [
@@ -71,6 +73,25 @@ YOUR_GROUP = 'advocate_ua_1'
 USERS_FILE = 'users_to_invite.json'
 INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
 
+# ====== Файл для отслеживания очереди групп ======
+GROUP_PROGRESS_FILE = "group_progress.json"
+
+def get_next_group_batch():
+    try:
+        with open(GROUP_PROGRESS_FILE, 'r') as f:
+            state = json.load(f)
+    except:
+        state = {"last_index": 0}
+
+    start = state["last_index"]
+    end = min(start + MAX_GROUPS_PER_CYCLE, len(GROUPS_TO_PARSE))
+    batch = GROUPS_TO_PARSE[start:end]
+
+    state["last_index"] = 0 if end >= len(GROUPS_TO_PARSE) else end
+    with open(GROUP_PROGRESS_FILE, 'w') as f:
+        json.dump(state, f)
+    return batch
+    
 async def parse_users(client):
     users_dict = {}
     for group in GROUPS_TO_PARSE:
