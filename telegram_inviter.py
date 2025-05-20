@@ -17,20 +17,6 @@ DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
 MAX_GROUPS_PER_CYCLE = 3
 PARSE_ONCE_EVERY_SECONDS = 86400  # каждая группа — один раз в сутки
 
-# === Аккаунты ===
-ACCOUNTS = [
-    {
-        "session": "inviter_session_1",
-        "api_id": 26735008,
-        "api_hash": "6c35a6247e6b6502e5b79173b22af871"
-    },
-    {
-        "session": "inviter_session_2",
-        "api_id": 20903513,
-        "api_hash": "0eb01bf47aeac4cbfd89fff140a4e06d"
-    }
-]
-
 GROUPS_TO_PARSE = [
     '@NRWanzeigen', '@ukraineingermany1', '@ukrainians_in_germany1',
     '@berlin_ukrainians', '@deutscheukraine', '@ukraincifrankfurt',
@@ -182,27 +168,6 @@ async def invite_users(client):
             await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"⚠️ Ошибка: {user['id']} — {e}")
-
-
-async def main():
-    mode = get_effective_mode()
-    account = get_next_account()
-
-    print(f"▶️ Режим: {mode.upper()}")
-    print(f"🚀 Работаем через сессию: {account['session']}")
-
-    client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
-    await client.start()
-
-    if mode == "parse":
-        await parse_users(client)
-    elif mode == "invite":
-        await invite_users(client)
-    else:
-        print(f"⚠️ Неизвестный режим: {mode}")
-
-    await client.disconnect()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
