@@ -11,23 +11,23 @@ from telethon.errors import (
 from telethon.tl.functions.channels import InviteToChannelRequest
 
 # === Telegram Limits ===
-MAX_INVITES_PER_DAY = 20
+MAX_INVITES_PER_DAY = 50
 MAX_MESSAGES_PER_DAY = 5
 DELAY_BETWEEN_ACTIONS = 120  # секунд между действиями
-MAX_GROUPS_PER_CYCLE = 3     # снижено для обхода ограничений
-GROUP_RETRY_DELAY = 14400    # 4 часа в секундах
+MAX_GROUPS_PER_CYCLE = 3
+PARSE_ONCE_EVERY_SECONDS = 86400  # каждая группа — один раз в сутки
 
 # === Аккаунты ===
 ACCOUNTS = [
     {
         "session": "inviter_session_1",
-        "api_id": int(os.getenv("API_ID_1")),
-        "api_hash": os.getenv("API_HASH_1")
+        "api_id": 26735008,
+        "api_hash": "6c35a6247e6b6502e5b79173b22af871"
     },
     {
         "session": "inviter_session_2",
-        "api_id": int(os.getenv("API_ID_2")),
-        "api_hash": os.getenv("API_HASH_2")
+        "api_id": 20903513,
+        "api_hash": "0eb01bf47aeac4cbfd89fff140a4e06d"
     }
 ]
 
@@ -73,28 +73,11 @@ YOUR_GROUP = 'advocate_ua_1'
 USERS_FILE = 'users_to_invite.json'
 INVITE_MESSAGE = "👋 Добрый день! Я адвокат, который помогает украинцам в Германии. Приглашаю вас посетить мой сайт: https://andriibilytskyi.com — буду рад помочь!"
 
-GROUP_PROGRESS_FILE = "group_progress.json"
-MODE_FILE = "bot_mode.json"
-ACCOUNT_INDEX_FILE = "account_index.json"
+GROUP_LOG = 'group_parse_log.json'
+MODE_FILE = 'bot_mode.json'
+ACCOUNT_INDEX_FILE = 'account_index.json'
 
-# === Получение очередной порции групп ===
-def get_next_group_batch():
-    try:
-        with open(GROUP_PROGRESS_FILE, 'r') as f:
-            state = json.load(f)
-    except:
-        state = {"last_index": 0}
 
-    start = state["last_index"]
-    end = min(start + MAX_GROUPS_PER_CYCLE, len(GROUPS_TO_PARSE))
-    batch = GROUPS_TO_PARSE[start:end]
-
-    state["last_index"] = 0 if end >= len(GROUPS_TO_PARSE) else end
-    with open(GROUP_PROGRESS_FILE, 'w') as f:
-        json.dump(state, f)
-    return batch
-
-# === Режим: auto переключает между parse/invite ===
 def get_effective_mode():
     mode = os.getenv("BOT_MODE", "auto").lower()
     if mode != "auto":
@@ -112,24 +95,44 @@ def get_effective_mode():
         json.dump({"last": next_mode}, f)
     return next_mode
 
-# === Цикличная смена аккаунтов ===
+
 def get_next_account():
     try:
         with open(ACCOUNT_INDEX_FILE, 'r') as f:
-            idx = json.load(f).get("index", 0)
+            idx = json.load(f).get("last", 0)
     except:
         idx = 0
-    new_idx = (idx + 1) % len(ACCOUNTS)
+
+    next_idx = (idx + 1) % len(ACCOUNTS)
     with open(ACCOUNT_INDEX_FILE, 'w') as f:
-        json.dump({"index": new_idx}, f)
-    return ACCOUNTS[new_idx]
+        json.dump({"last": next_idx}, f)
+    return ACCOUNTS[next_idx]
+
+
+def should_parse(group):
+    try:
+        with open(GROUP_LOG, 'r') as f:
+            log = json.load(f)
+    except:
+        log = {}
+
+    now = time.time()
+    last_time = log.get(group, 0)
+    if now - last_time >= PARSE_ONCE_EVERY_SECONDS:
+        log[group] = now
+        with open(GROUP_LOG, 'w') as f:
+            json.dump(log, f)
+        return True
+    return False
+
 
 async def parse_users(client):
     users_dict = {}
-    for group in get_next_group_batch():
+    for group in GROUPS_TO_PARSE:
+        if not should_parse(group):
+            continue
         print(f"📡 Парсинг группы: {group}")
         try:
-            await asyncio.sleep(5)
             async for message in client.iter_messages(group, limit=1000):
                 if message.sender_id and message.text:
                     text = re.sub(r'[^\w\s]', '', message.text.lower())
@@ -143,77 +146,63 @@ async def parse_users(client):
             print(f"❌ Ошибка в {group}: {e}")
 
     print(f"📊 Найдено пользователей: {len(users_dict)}")
-
     if users_dict:
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(list(users_dict.values()), f, ensure_ascii=False, indent=2)
-
-        try:
-            print("📤 Отправка users_to_invite.json в Избранное...")
-            await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
-        except Exception as e:
-            print(f"❌ Не удалось отправить файл: {e}")
     else:
         print("⚠️ Пользователи не найдены. Файл не создан.")
 
+
 async def invite_users(client):
     if not os.path.exists(USERS_FILE):
-        print("❌ Файл пользователей не найден")
+        print("⚠️ Файл users_to_invite.json не найден.")
         return
 
     with open(USERS_FILE, 'r', encoding='utf-8') as f:
         users = json.load(f)
 
-    count_invited = 0
-    count_messaged = 0
+    invited_today = 0
     for user in users:
-        try:
-            if count_invited >= MAX_INVITES_PER_DAY and count_messaged >= MAX_MESSAGES_PER_DAY:
-                print("⏹️ Достигнут дневной лимит приглашений и сообщений")
-                break
+        if invited_today >= MAX_INVITES_PER_DAY:
+            print("✅ Лимит приглашений на сегодня исчерпан.")
+            break
 
+        try:
             entity = await client.get_entity(user['id'])
-            try:
-                await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
-                print(f"✅ Приглашён: {user['id']}")
-                count_invited += 1
-            except (UserAlreadyParticipantError):
-                print(f"⚠️ Уже в группе: {user['id']}")
-            except (UserPrivacyRestrictedError, RPCError):
-                if count_messaged < MAX_MESSAGES_PER_DAY:
-                    await client.send_message(entity, INVITE_MESSAGE)
-                    print(f"📩 Сообщение отправлено: {user['id']}")
-                    count_messaged += 1
+            await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
+            print(f"🎯 Приглашён: {user['id']} @{user.get('username')}")
+            invited_today += 1
             await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
+        except UserAlreadyParticipantError:
+            print(f"➡️ Уже в группе: {user['id']}")
+        except UserPrivacyRestrictedError:
+            print(f"⛔ Приватность: {user['id']}")
         except FloodWaitError as e:
-            print(f"⏳ FloodWait: ждём {e.seconds} секунд...")
+            print(f"⏳ FloodWait: ждём {e.seconds} сек...")
             await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"⚠️ Ошибка: {user['id']} — {e}")
 
+
 async def main():
     mode = get_effective_mode()
-    print(f"▶️ Режим: {mode.upper()}")
-
     account = get_next_account()
-    client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
-    await client.start()
+
+    print(f"▶️ Режим: {mode.upper()}")
     print(f"🚀 Работаем через сессию: {account['session']}")
 
-    try:
-        if mode == "parse":
-            await parse_users(client)
-        elif mode == "invite":
-            await invite_users(client)
-        else:
-            print(f"⚠️ Неизвестный режим: {mode}")
-    except FloodWaitError as e:
-        print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек. Ждём...")
-        await asyncio.sleep(e.seconds)
-    except Exception as e:
-        print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
-    finally:
-        await client.disconnect()
+    client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
+    await client.start()
+
+    if mode == "parse":
+        await parse_users(client)
+    elif mode == "invite":
+        await invite_users(client)
+    else:
+        print(f"⚠️ Неизвестный режим: {mode}")
+
+    await client.disconnect()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
