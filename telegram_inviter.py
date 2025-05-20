@@ -130,7 +130,7 @@ async def invite_users(account):
         users = []
 
     try:
-        with open(INVITED_LOG, 'r') as f:
+        with open(INVITED_LOG, 'r', encoding='utf-8') as f:
             invited = json.load(f)
     except:
         invited = []
@@ -143,27 +143,36 @@ async def invite_users(account):
         if invited_today >= MAX_INVITES_PER_DAY:
             break
         try:
-            entity = await client.get_entity(user['id'])
+            if user.get("username"):
+                entity = await client.get_input_entity(user["username"])
+            else:
+                entity = await client.get_input_entity(user["id"])
+
             await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
+
             try:
                 await client.send_message(entity, INVITE_MESSAGE)
             except Exception as e:
                 print(f"⚠️ Не удалось отправить сообщение: {e}")
+
             print(f"🎯 {account['session']} пригласил: {user['id']}")
             invited.append(user)
             invited_today += 1
             await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
+
         except UserAlreadyParticipantError:
+            print(f"↪️ Уже в группе: {user['id']}")
             invited.append(user)
         except UserPrivacyRestrictedError:
+            print(f"🔒 Приватность: {user['id']}")
             invited.append(user)
         except FloodWaitError as e:
             print(f"⏳ FloodWait: ждём {e.seconds} сек...")
             await asyncio.sleep(e.seconds)
         except Exception as e:
-            print(f"⚠️ Ошибка при приглашении: {e}")
+            print(f"⚠️ Ошибка при приглашении {user['id']}: {e}")
 
-    with open(INVITED_LOG, 'w') as f:
+    with open(INVITED_LOG, 'w', encoding='utf-8') as f:
         json.dump(invited, f, ensure_ascii=False, indent=2)
 
     await client.disconnect()
