@@ -169,10 +169,17 @@ async def invite_users(account):
     await client.disconnect()
 
 async def main():
+    mode = os.getenv("BOT_MODE", "auto").lower()
+
     for account in ACCOUNTS:
-        await parse_users(account)
-        await invite_users(account)
+        if mode == "invite":
+            print(f"🚀 INVITE | {account['session']}")
+            await invite_users(account)
+        elif mode == "parse":
+            print(f"🔍 PARSE | {account['session']}")
+            await parse_users(account)
+        else:
+            print(f"⚠️ Неизвестный режим: {mode}")
 
 if __name__ == '__main__':
     asyncio.run(main())
-
