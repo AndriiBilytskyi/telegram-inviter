@@ -63,6 +63,19 @@ GROUP_LOG = 'group_parse_log.json'
 MODE_FILE = 'bot_mode.json'
 ACCOUNT_INDEX_FILE = 'account_index.json'
 
+ACCOUNTS = [
+    {
+        "session": "inviter_session_1",
+        "api_id": int(os.environ.get("API_ID_1")),
+        "api_hash": os.environ.get("API_HASH_1")
+    },
+    {
+        "session": "inviter_session_2",
+        "api_id": int(os.environ.get("API_ID_2")),
+        "api_hash": os.environ.get("API_HASH_2")
+    }
+]
+
 
 def get_effective_mode():
     mode = os.getenv("BOT_MODE", "auto").lower()
@@ -168,6 +181,19 @@ async def invite_users(client):
             await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"⚠️ Ошибка: {user['id']} — {e}")
+
+
+async def main():
+    mode = get_effective_mode()
+    account = get_next_account()
+    print(f"🔁 Режим: {mode.upper()} | Сессия: {account['session']}")
+
+    async with TelegramClient(account['session'], account['api_id'], account['api_hash']) as client:
+        if mode == "parse":
+            await parse_users(client)
+        else:
+            await invite_users(client)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
