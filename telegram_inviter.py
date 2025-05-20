@@ -565,3 +565,110 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
+async def parse_users(client):
+    users_dict = {}
+    batch = get_next_group_batch()
+
+    for group in batch:
+        print(f"📡 Парсинг группы: {group}")
+        try:
+            async for message in client.iter_messages(group, limit=1000):
+                if message.sender_id and message.text:
+                    text = re.sub(r'[^\w\s]', '', message.text.lower())
+                    if any(kw in text for kw in KEYWORDS):
+                        sender = await message.get_sender()
+                        uid = sender.id
+                        if uid not in users_dict:
+                            users_dict[uid] = {"id": uid, "username": sender.username}
+                            print(f"✅ Найден пользователь: {uid} @{sender.username or '—'}")
+        except Exception as e:
+            print(f"❌ Ошибка в {group}: {e}")
+
+    print(f"📊 Найдено пользователей: {len(users_dict)}")
+
+    if users_dict:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(list(users_dict.values()), f, ensure_ascii=False, indent=2)
+
+        try:
+            await client.send_file('me', USERS_FILE, caption="👥 Список пользователей для инвайта")
+            print("✅ Файл отправлен в Saved Messages")
+        except Exception as e:
+            print(f"❌ Не удалось отправить файл: {e}")
+    else:
+        print("⚠️ Пользователи не найдены. Файл не создан.")
+
+async def invite_users(client):
+    if not os.path.exists(USERS_FILE):
+        print("⚠️ Нет файла users_to_invite.json — запусти сначала режим parse.")
+        return
+
+    with open(USERS_FILE, 'r', encoding='utf-8') as f:
+        users = json.load(f)
+
+    invited_count = 0
+    messaged_count = 0
+
+    for user in users:
+        if invited_count >= MAX_INVITES_PER_DAY and messaged_count >= MAX_MESSAGES_PER_DAY:
+            print("🛑 Достигнут лимит на инвайты и сообщения")
+            break
+
+        try:
+            entity = await client.get_entity(user['id'])
+
+            # Проверка на участие в группе
+            try:
+                await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
+                print(f"✅ Приглашён: {user['id']} @{user.get('username', '—')}")
+                invited_count += 1
+                await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
+                continue
+            except UserAlreadyParticipantError:
+                print(f"ℹ️ Уже в группе: {user['id']}")
+                continue
+            except UserPrivacyRestrictedError:
+                print(f"⛔ Приватность не позволяет пригласить: {user['id']}")
+            except RPCError as e:
+                print(f"⚠️ Ошибка: {user['id']} — {e}")
+
+            if messaged_count < MAX_MESSAGES_PER_DAY:
+                try:
+                    await client.send_message(entity, INVITE_MESSAGE)
+                    print(f"📩 Сообщение отправлено: {user['id']}")
+                    messaged_count += 1
+                    await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
+                except Exception as e:
+                    print(f"⚠️ Не удалось отправить сообщение: {e}")
+
+        except Exception as e:
+            print(f"⚠️ Ошибка получения сущности: {user['id']} — {e}")
+
+async def main():
+    mode = get_effective_mode()
+    print(f"▶️ Режим: {mode.upper()}")
+
+    for account in ACCOUNTS:
+        client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
+        await client.start()
+        print(f"🚀 Работаем через сессию: {account['session']}")
+
+        try:
+            if mode == "parse":
+                await parse_users(client)
+            elif mode == "invite":
+                await invite_users(client)
+            else:
+                print(f"⚠️ Неизвестный режим: {mode}")
+            break
+        except FloodWaitError as e:
+            print(f"⏳ FloodWait: Telegram требует паузу {e.seconds} сек.")
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            print(f"❌ Ошибка с аккаунтом {account['session']}: {e}")
+        finally:
+            await client.disconnect()
+
+if __name__ == "__main__":
+    asyncio.run(main())
