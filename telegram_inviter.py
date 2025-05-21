@@ -124,7 +124,7 @@ import asyncio
 async def invite_users(account):
     from telethon.errors import (
         FloodWaitError, UserAlreadyParticipantError,
-        UserPrivacyRestrictedError, InviteToChannelRequestError
+        UserPrivacyRestrictedError
     )
 
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
@@ -174,10 +174,6 @@ async def invite_users(account):
 
         except UserPrivacyRestrictedError:
             print(f"⛔ Приватность мешает: {user['username']}")
-            invited.append(user)
-
-        except InviteToChannelRequestError as e:
-            print(f"⚠️ Ошибка при приглашении {user['username']}: {str(e)}")
             invited.append(user)
 
         except FloodWaitError as e:
