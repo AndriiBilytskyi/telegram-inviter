@@ -83,11 +83,10 @@ async def parse_users(account):
 
     known_ids = {u["id"] for u in users}
     now = time.time()
-    new_users = []
 
     for group in GROUPS_TO_PARSE:
         last_parsed = group_log.get(account["session"], {}).get(group, 0)
-        if now - last_parsed < PARSE_ONCE_EVERY_SECONDS:
+        if now < last_parsed:
             continue
 
         print(f"📡 {account['session']} парсит {group}")
@@ -106,10 +105,17 @@ async def parse_users(account):
                             if count >= MAX_INVITES_PER_DAY:
                                 break
             print(f"✅ {account['session']} нашел {count} новых пользователей в {group}")
+
+            group_log.setdefault(account["session"], {})[group] = now + PARSE_ONCE_EVERY_SECONDS
+
+        except FloodWaitError as e:
+            print(f"⏳ FloodWait при парсинге {group}: ждём {e.seconds} сек")
+            group_log.setdefault(account["session"], {})[group] = now + e.seconds
+
         except Exception as e:
             print(f"❌ Ошибка при парсинге {group}: {e}")
+            group_log.setdefault(account["session"], {})[group] = now + 3600  # 1 час паузы по умолчанию
 
-        group_log.setdefault(account["session"], {})[group] = now
         await asyncio.sleep(1)
 
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
