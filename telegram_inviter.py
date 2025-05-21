@@ -119,15 +119,12 @@ async def parse_users(account):
 
     await client.disconnect()
 
-from telethon.tl.types import InputPeerUser
 import asyncio
 
 async def invite_users(account):
-    from telethon.tl.functions.channels import InviteToChannelRequest
     from telethon.errors import (
-        UserAlreadyParticipantError,
-        UserPrivacyRestrictedError,
-        FloodWaitError
+        FloodWaitError, UserAlreadyParticipantError,
+        UserPrivacyRestrictedError, InviteToChannelRequestError
     )
 
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
@@ -148,8 +145,6 @@ async def invite_users(account):
     invited_ids = {u["id"] for u in invited}
     to_invite = [u for u in users if u["id"] not in invited_ids]
     invited_today = 0
-
-    print(f"🚀 INVITE | {account['session']}")
 
     for user in to_invite:
         if invited_today >= MAX_INVITES_PER_DAY:
@@ -174,11 +169,15 @@ async def invite_users(account):
             await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
 
         except UserAlreadyParticipantError:
-            print(f"ℹ️ Уже в группе: {user['username']}")
+            print(f"↪️ Уже в группе: {user['username']}")
             invited.append(user)
 
         except UserPrivacyRestrictedError:
-            print(f"🔒 Приватность: {user['username']}")
+            print(f"⛔ Приватность мешает: {user['username']}")
+            invited.append(user)
+
+        except InviteToChannelRequestError as e:
+            print(f"⚠️ Ошибка при приглашении {user['username']}: {str(e)}")
             invited.append(user)
 
         except FloodWaitError as e:
@@ -186,7 +185,7 @@ async def invite_users(account):
             await asyncio.sleep(e.seconds)
 
         except Exception as e:
-            print(f"⚠️ Ошибка при приглашении {user['username']}: {e}")
+            print(f"⚠️ Ошибка при приглашении {user['username']}: {str(e)}")
 
     with open(INVITED_LOG, 'w', encoding='utf-8') as f:
         json.dump(invited, f, ensure_ascii=False, indent=2)
