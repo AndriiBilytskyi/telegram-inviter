@@ -188,18 +188,32 @@ async def invite_users(account):
 
     await client.disconnect()
 
-async def main():
-    mode = os.getenv("BOT_MODE", "auto").lower()
+import datetime
 
-    for account in ACCOUNTS:
-        if mode == "invite":
-            print(f"🚀 INVITE | {account['session']}")
-            await invite_users(account)
-        elif mode == "parse":
-            print(f"🔍 PARSE | {account['session']}")
-            await parse_users(account)
-        else:
-            print(f"⚠️ Неизвестный режим: {mode}")
+async def main():
+    print(f"🔁 Автоматический режим с ротацией аккаунтов раз в час\n")
+
+    rotate = 0  # счётчик для чередования аккаунтов
+
+    while True:
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"\n🕒 Запуск цикла: {now}")
+
+        parse_index = rotate % 2
+        invite_index = (rotate + 1) % 2
+
+        parse_account = ACCOUNTS[parse_index]
+        invite_account = ACCOUNTS[invite_index]
+
+        print(f"🔍 PARSE | {parse_account['session']}")
+        await parse_users(parse_account)
+
+        print(f"🚀 INVITE | {invite_account['session']}")
+        await invite_users(invite_account)
+
+        rotate += 1
+        print("⏳ Ожидание 1 часа до следующего запуска...\n")
+        await asyncio.sleep(3600)
 
 if __name__ == '__main__':
     asyncio.run(main())
