@@ -77,15 +77,15 @@ async def parse_users(account):
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
     await client.start()
 
+    filename = f"users_to_invite_{account['session']}.json"
     try:
         with open(GROUP_LOG, 'r') as f:
             group_log = json.load(f)
     except:
         group_log = {}
 
-    users_file = f"users_to_invite_{account['session']}.json"
     try:
-        with open(users_file, 'r', encoding='utf-8') as f:
+        with open(filename, 'r') as f:
             users = json.load(f)
     except:
         users = []
@@ -98,8 +98,7 @@ async def parse_users(account):
         if now - last_parsed < PARSE_ONCE_EVERY_SECONDS:
             continue
 
-        print(f"🛁 {account['session']} парсит {group}")
-        count = 0
+        print(f"📡 {account['session']} парсит {group}")
         try:
             async for message in client.iter_messages(group, limit=1000):
                 if message.sender_id and message.text:
@@ -110,31 +109,27 @@ async def parse_users(account):
                         if uid not in known_ids:
                             users.append({"id": uid, "username": sender.username})
                             known_ids.add(uid)
-                            count += 1
-                            if count >= MAX_INVITES_PER_DAY:
-                                break
-            print(f"✅ {account['session']} нашел {count} новых пользователей в {group}")
         except Exception as e:
             print(f"❌ Ошибка при парсинге {group}: {e}")
 
         group_log.setdefault(account["session"], {})[group] = now
         await asyncio.sleep(1)
 
-    with open(users_file, 'w', encoding='utf-8') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         json.dump(users, f, ensure_ascii=False, indent=2)
     with open(GROUP_LOG, 'w') as f:
         json.dump(group_log, f)
 
-    await send_file_to_saved_messages(client, users_file)
+    await send_file_to_saved_messages(client, filename)
     await client.disconnect()
 
 async def invite_users(account):
     client = TelegramClient(account["session"], account["api_id"], account["api_hash"])
     await client.start()
 
-    users_file = f"users_to_invite_{account['session']}.json"
+    filename = f"users_to_invite_{account['session']}.json"
     try:
-        with open(users_file, 'r', encoding='utf-8') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             users = json.load(f)
     except:
         users = []
@@ -152,7 +147,6 @@ async def invite_users(account):
     for user in to_invite:
         if invited_today >= MAX_INVITES_PER_DAY:
             break
-
         if not user.get("username"):
             print(f"⛔ Пропускаю {user['id']} — нет username для get_entity()")
             continue
@@ -160,17 +154,19 @@ async def invite_users(account):
         try:
             entity = await client.get_entity(user["username"])
             await client(InviteToChannelRequest(YOUR_GROUP, [entity]))
+
             try:
                 await client.send_message(entity, INVITE_MESSAGE)
             except Exception as e:
                 print(f"⚠️ Не удалось отправить сообщение {user['username']}: {e}")
-            print(f"🌿 {account['session']} пригласил: {user['id']} ({user['username']})")
+
+            print(f"🎯 {account['session']} пригласил: {user['id']} ({user['username']})")
             invited.append(user)
             invited_today += 1
             await asyncio.sleep(DELAY_BETWEEN_ACTIONS)
 
         except UserAlreadyParticipantError:
-            print(f"↪ Уже в группе: {user['username']}")
+            print(f"↪️ Уже в группе: {user['username']}")
             invited.append(user)
 
         except UserPrivacyRestrictedError:
@@ -182,9 +178,27 @@ async def invite_users(account):
             await asyncio.sleep(e.seconds)
 
         except Exception as e:
-            print(f"⚠️ Ошибка при приглашении {user['username']}: {e}")
+            print(f"⚠️ Ошибка при приглашении {user['username']}: {str(e)}")
 
     with open(INVITED_LOG, 'w', encoding='utf-8') as f:
         json.dump(invited, f, ensure_ascii=False, indent=2)
 
     await client.disconnect()
+
+async def main():
+    while True:
+        for account in ACCOUNTS:
+            print(f"🔍 {account['session']} — parse")
+            await parse_users(account)
+            await asyncio.sleep(2)
+
+        for account in ACCOUNTS:
+            print(f"🚀 {account['session']} — invite")
+            await invite_users(account)
+            await asyncio.sleep(2)
+
+        print("⏳ Пауза до следующего цикла (60 минут)...")
+        await asyncio.sleep(3600)
+
+if __name__ == '__main__':
+    asyncio.run(main())
